@@ -35,7 +35,10 @@ namespace MatchFetcher
 
             string outputPath = @"../../";
 
-            List<string> championsToExtract = new List<string>() {"Tryndamere" };
+            Dictionary<string, string> championsToExtract = new Dictionary<string, string>() 
+            {
+                { "Tryndamere", "TOP" },
+            };
             //---------------------------------------//
 
             
@@ -174,6 +177,8 @@ namespace MatchFetcher
                             TimelineDTO timeLine = JsonConvert.DeserializeObject<TimelineDTO>(responseBodyTimeLine);
 
                             matches.Add(match, timeLine);
+                            
+                            break; // REMOVE
 
                             Thread.Sleep(1500);
 
@@ -182,12 +187,88 @@ namespace MatchFetcher
                         }
                     }
                     catch (HttpRequestException e)
-                    {
+                    { 
                         Console.WriteLine($"Request error: {e.Message}");
                     }
+                } 
+            }
+
+            // Finalize the train data
+            Dictionary<string, List<TrainData>> specializedTrainData = new Dictionary<string, List<TrainData>>(); // This is the desired champion.
+            List<TrainData> otherTrainData = new List<TrainData>(); // This is everyone else, that is NOT that champion.
+
+            foreach (var element in matches) 
+            {
+                // Key == match
+                // Value == timeline
+
+                foreach (var champ in championsToExtract) 
+                {
+                    // Find the unique champions we want to train the data on, specified in championsToExtract.
+                    ParticipantDTO participant = element.Key.info.participants.Where(x => x.ChampionName == champ.Key).FirstOrDefault();
+
+                    if (participant != null && participant.IndividualPosition == champ.Value) 
+                    {
+                        // Desired champion exists in this match, with the correct position.
+                        TrainData tempTrainData = new TrainData()
+                        {
+                            participantId = participant.Puuid,
+                            participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == participant.Puuid),
+                            championName = participant.ChampionName
+                        };
+
+                        // Get all the frames of said champion.
+                        switch (tempTrainData.participantFrameNumber) 
+                        {
+                            case 0:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
+                                break;
+                            case 1:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._2).ToList();
+                                break;
+                            case 2:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._3).ToList();
+                                break;
+                            case 3:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._4).ToList();
+                                break;
+                            case 4:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._5).ToList();
+                                break;
+                            case 5:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._6).ToList();
+                                break;
+                            case 6:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._7).ToList();
+                                break;
+                            case 7:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._8).ToList();
+                                break;
+                            case 8:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._9).ToList();
+                                break;
+                            case 9:
+                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._10).ToList();
+                                break;
+                        }
+
+                        if (specializedTrainData.ContainsKey(champ.Key)) 
+                        {
+                            List<TrainData> trainData = specializedTrainData[champ.Key];
+                            trainData.Add(tempTrainData);
+                        }
+                        else 
+                        {
+                            specializedTrainData.Add(champ.Key, new List<TrainData>() { tempTrainData });
+                        }
+                    }
+
+                    // Get every other frame that is NOT desired champion.
                 }
             }
 
+
+            // Statistics
             Dictionary<string, List<MatchDTO>> organizedMatches = new Dictionary<string, List<MatchDTO>>();
 
             foreach (MatchDTO match in matches.Keys) 
@@ -210,18 +291,20 @@ namespace MatchFetcher
                         organizedMatches.Add(participant.ChampionName, new List<MatchDTO>() { match });
                     }
                 }
-                // Iterate through matches and group them into <key,value> where key is champion and value is the match.
             }
             
+
+
+
+
+            // Train object, som kommer til at være et udsnit af timelapse af X champion.
+            // Så har man rækker, som hver især repræsentere en frame.
+            // En CSV med tryndamere, og en med alle andre end tryndamere, men i hans kategori.
+
             // Træn modellen på 3 variabler. Tid, skade, koordinater. Binært klassifikations problem. Aggressiv/defensiv.
             // Du skal have flere modeller. 1 model til hver champion. Også selve modellen der er trænet på ALT data.
             // Derefter skal der sammenlignes, tryndamere modellen op mod den store model og se hvordan den performer.
             // Tag champion kategorier, såsom skirmishers (tryndamere) også fokuser på de champions i den kategori.
-
-
-
-
-
         }
     }
 }
