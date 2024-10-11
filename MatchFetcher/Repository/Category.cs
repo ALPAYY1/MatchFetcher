@@ -21,7 +21,7 @@ namespace MatchFetcher.Repository
 
         public static List<string> Catcher = new List<string>() { "Bard", "Blitzcrank", "Ivern", "Jhin", "Morgana", "Rakan", "Thresh", "Zyra" };
 
-        public static List<string> Diver = new List<string>() { "Briar", "Camille", "Elise", "Hecarim", "Irelia", "Jarvan IV", "Lee Sin",
+        public static List<string> Diver = new List<string>() { "Briar", "Camille", "Elise", "Hecarim", "Irelia", "JarvanIV", "Lee Sin",
         "Olaf", "Pantheon", "Rek'Sai", "Renekton", "Vi", "Warwick", "Wukong", "Xin Zhao"};
 
         public static List<string> Enchanter = new List<string>() { "Janna", "Karma", "Lulu", "Milio", "Nami", "Renata Glasc", "Senna",
@@ -44,5 +44,25 @@ namespace MatchFetcher.Repository
         "Ornn", "Rammus", "Rell", "Sejuani", "Sion", "Skarner", "Zac"};
 
         public static List<string> Warden = new List<string>() { "Braum", "Galio", "Poppy", "Shen", "Tahm Kench" };
+
+
+        public static List<string> GetChampionsInCategory (string champName) 
+        {
+            if (Artillery.Contains(champName)) return Artillery;
+            if (Assassin.Contains(champName)) return Assassin;
+            if (Battlemage.Contains(champName)) return Battlemage;
+            if (Burst.Contains(champName)) return Burst;
+            if (Catcher.Contains(champName)) return Catcher;
+            if (Diver.Contains(champName)) return Diver;
+            if (Enchanter.Contains(champName)) return Enchanter;
+            if (Juggernaut.Contains(champName)) return Juggernaut;
+            if (Marksman.Contains(champName)) return Marksman;
+            if (Skirmisher.Contains(champName)) return Skirmisher;
+            if (Specialist.Contains(champName)) return Specialist;
+            if (Vanguard.Contains(champName)) return Vanguard;
+            if (Warden.Contains(champName)) return Warden;
+
+            return new List<string>();
+        }
     }
 }

@@ -35,13 +35,12 @@ namespace MatchFetcher
 
             string outputPath = @"../../";
 
-            Dictionary<string, string> championsToExtract = new Dictionary<string, string>() 
-            {
-                { "Tryndamere", "TOP" },
-            };
-            //---------------------------------------//
+            KeyValuePair<string, string> championToExtract = new KeyValuePair<string, string>("Tryndamere", "TOP"); // Key = champname. Value = position.
+            //-----------------DO NOT EDIT BELOW THIS LINE----------------------//
 
-            
+            List<string> championsInCategory = Category.GetChampionsInCategory(championToExtract.Key);
+            if (!championsInCategory.Any()) throw new Exception($"Invalid champion provided ( {championToExtract.Key} ). Check spelling.");
+
             List<MatchEntryDTO> matchEntries = new List<MatchEntryDTO>();
 
             foreach (string league in leagues) 
@@ -99,7 +98,7 @@ namespace MatchFetcher
 
                     Thread.Sleep(1500);
 
-                    if (summoners.Count > 10) break; // REMOVE
+                    if (summoners.Count > 20) break; // REMOVE
 
                     ConsoleCommands.ClearCurrentLine();
                     Console.WriteLine($"Summoners found: {summoners.Count}");
@@ -178,7 +177,7 @@ namespace MatchFetcher
 
                             matches.Add(match, timeLine);
                             
-                            break; // REMOVE
+                            // break; // REMOVE
 
                             Thread.Sleep(1500);
 
@@ -202,23 +201,84 @@ namespace MatchFetcher
                 // Key == match
                 // Value == timeline
 
-                foreach (var champ in championsToExtract) 
-                {
-                    // Find the unique champions we want to train the data on, specified in championsToExtract.
-                    ParticipantDTO participant = element.Key.info.participants.Where(x => x.ChampionName == champ.Key).FirstOrDefault();
+                // Find the unique champion we want to train the data on, specified in championToExtract.
+                ParticipantDTO participant = element.Key.info.participants.Where(x => x.ChampionName == championToExtract.Key).FirstOrDefault();
 
-                    if (participant != null && participant.IndividualPosition == champ.Value) 
+                if (participant != null && participant.IndividualPosition == championToExtract.Value) 
+                {
+                    // Desired champion EXISTS in this match AND has the correct position.
+
+                    TrainData tempTrainData = new TrainData()
                     {
-                        // Desired champion exists in this match, with the correct position.
+                        participantId = participant.Puuid,
+                        participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == participant.Puuid),
+                        championName = participant.ChampionName
+                    };
+
+                    // Get all the frames of said champion.
+                    switch (tempTrainData.participantFrameNumber) 
+                    {
+                        case 0:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
+                            break;
+                        case 1:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._2).ToList();
+                            break;
+                        case 2:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._3).ToList();
+                            break;
+                        case 3:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._4).ToList();
+                            break;
+                        case 4:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._5).ToList();
+                            break;
+                        case 5:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._6).ToList();
+                            break;
+                        case 6:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._7).ToList();
+                            break;
+                        case 7:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._8).ToList();
+                            break;
+                        case 8:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._9).ToList();
+                            break;
+                        case 9:
+                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._10).ToList();
+                            break;
+                    }
+
+                    if (specializedTrainData.ContainsKey(championToExtract.Key)) 
+                    {
+                        List<TrainData> trainData = specializedTrainData[championToExtract.Key];
+                        trainData.Add(tempTrainData);
+                    }
+                    else 
+                    {
+                        specializedTrainData.Add(championToExtract.Key, new List<TrainData>() { tempTrainData });
+                    }
+                }
+ 
+                // Get every champion that is NOT our desired champion.
+                List<ParticipantDTO> tempParticipants = element.Key.info.participants.Where(x => x.ChampionName != championToExtract.Key).ToList();
+                    
+                foreach (ParticipantDTO tparticipant in tempParticipants) 
+                {
+                    // Is the champion we have here the SAME category as our desired champion AND SAME position?
+                    if (championsInCategory.Contains(tparticipant.ChampionName) && tparticipant.IndividualPosition == championToExtract.Value) 
+                    {
+                        // The champion that is NOT our desired champion, is in the SAME category as the desired champion.
                         TrainData tempTrainData = new TrainData()
                         {
-                            participantId = participant.Puuid,
-                            participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == participant.Puuid),
-                            championName = participant.ChampionName
+                            participantId = tparticipant.Puuid,
+                            participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == tparticipant.Puuid),
+                            championName = tparticipant.ChampionName
                         };
 
                         // Get all the frames of said champion.
-                        switch (tempTrainData.participantFrameNumber) 
+                        switch (tempTrainData.participantFrameNumber)
                         {
                             case 0:
                                 tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
@@ -252,49 +312,16 @@ namespace MatchFetcher
                                 break;
                         }
 
-                        if (specializedTrainData.ContainsKey(champ.Key)) 
-                        {
-                            List<TrainData> trainData = specializedTrainData[champ.Key];
-                            trainData.Add(tempTrainData);
-                        }
-                        else 
-                        {
-                            specializedTrainData.Add(champ.Key, new List<TrainData>() { tempTrainData });
-                        }
+                        otherTrainData.Add(tempTrainData);
                     }
-
-                    // Get every other frame that is NOT desired champion.
+                    // We don't care about champions that don't fall into the same category & position - because comparing vayne top to tryndamere top
+                    // will draw undesired conclusions, when training the model. 
                 }
             }
 
-
-            // Statistics
-            Dictionary<string, List<MatchDTO>> organizedMatches = new Dictionary<string, List<MatchDTO>>();
-
-            foreach (MatchDTO match in matches.Keys) 
-            {
-                foreach(ParticipantDTO participant in match.info.participants) 
-                {
-                    if (organizedMatches.Keys.Contains(participant.ChampionName)) 
-                    {
-                        foreach (var element in organizedMatches) 
-                        {
-                            if (element.Key == participant.ChampionName) 
-                            {
-                                element.Value.Add(match);
-                                break; 
-                            }
-                        }
-                    }
-                    else 
-                    {
-                        organizedMatches.Add(participant.ChampionName, new List<MatchDTO>() { match });
-                    }
-                }
-            }
+             if (!specializedTrainData.Any()) throw new Exception($"No champion with name {championToExtract.Key} was found. Get more games.");
             
-
-
+             // Generate the CSV.
 
 
             // Train object, som kommer til at være et udsnit af timelapse af X champion.
