@@ -1,14 +1,13 @@
-﻿using MatchFetcher.DTO;
+﻿using CsvHelper;
+using MatchFetcher.DTO;
 using MatchFetcher.Repository;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
-using System.Security.AccessControl;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,27 +15,19 @@ namespace MatchFetcher
 {
     public class Program
     {
-        /// <summary>
-        /// Fetches matches and groups those matches in the amount of champions that exist in league of legends.
-        /// 150 champions means 150 groups of matches i.e 1 group of tryndamere games, 1 group for aatrox games etc.
-        /// 1 big CSV will be generated with everything grouped together and then another X amount will be made for champion specific. (defined in
-        /// champions to extract)
-        /// </summary>
-        /// <param name="args"></param>
-        /// <returns></returns>
         static async Task Main(string[] args)
         {
             // , "bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster", "challenger"
-            List<string> leagues = new List<string> { "iron" };
+            List<string> leagues = new List<string> { "iron", "bronze" };
             List<string> divisions = new List<string> { "i" };
             List<string> pages = new List<string> { "1" };
 
             string apiKey = "RGAPI-e75b46d3-5e51-4829-b978-68790c3ebf56";
 
-            string outputPath = @"../../";
-
             KeyValuePair<string, string> championToExtract = new KeyValuePair<string, string>("Tryndamere", "TOP"); // Key = champname. Value = position.
-            //-----------------DO NOT EDIT BELOW THIS LINE----------------------//
+            
+            //-----------------DO NOT EDIT BELOW THIS LINE, UNLESS YOU KNOW WHAT YOU'RE DOING----------------------//
+
 
             List<string> championsInCategory = Category.GetChampionsInCategory(championToExtract.Key);
             if (!championsInCategory.Any()) throw new Exception($"Invalid champion provided ( {championToExtract.Key} ). Check spelling.");
@@ -98,7 +89,7 @@ namespace MatchFetcher
 
                     Thread.Sleep(1500);
 
-                    if (summoners.Count > 20) break; // REMOVE
+                    if (summoners.Count > 25) break; // REMOVE
 
                     ConsoleCommands.ClearCurrentLine();
                     Console.WriteLine($"Summoners found: {summoners.Count}");
@@ -177,7 +168,7 @@ namespace MatchFetcher
 
                             matches.Add(match, timeLine);
                             
-                            // break; // REMOVE
+                            //break; // REMOVE
 
                             Thread.Sleep(1500);
 
@@ -319,19 +310,37 @@ namespace MatchFetcher
                 }
             }
 
-             if (!specializedTrainData.Any()) throw new Exception($"No champion with name {championToExtract.Key} was found. Get more games.");
+            if (!specializedTrainData.Any()) throw new Exception($"No champion with name {championToExtract.Key} was found. Get more games.");
+
+            // Time to start generating the CSV.
+            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             
-             // Generate the CSV.
+            // Create one for our SPECIFIC champions.
+            using (var writer = new StreamWriter(@desktopPath + $"\\{specializedTrainData.Keys.First()}"))
+            {
+                foreach (List<TrainData> td in specializedTrainData.Values)
+                {
+                    using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                    {
+                        foreach (TrainData std in td)
+                        {
+                            csv.WriteRecords(std.frames);
+                        }
+                    }
+                }
+            }
 
-
-            // Train object, som kommer til at være et udsnit af timelapse af X champion.
-            // Så har man rækker, som hver især repræsentere en frame.
-            // En CSV med tryndamere, og en med alle andre end tryndamere, men i hans kategori.
-
-            // Træn modellen på 3 variabler. Tid, skade, koordinater. Binært klassifikations problem. Aggressiv/defensiv.
-            // Du skal have flere modeller. 1 model til hver champion. Også selve modellen der er trænet på ALT data.
-            // Derefter skal der sammenlignes, tryndamere modellen op mod den store model og se hvordan den performer.
-            // Tag champion kategorier, såsom skirmishers (tryndamere) også fokuser på de champions i den kategori.
+            // Create one for OTHER champions.
+            using (var writer = new StreamWriter(@desktopPath + $"\\otherChampions")) 
+            {
+                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                {
+                    foreach (TrainData td in otherTrainData)
+                    {
+                        csv.WriteRecords(td.frames);
+                    }
+                }
+            }
         }
     }
 }
