@@ -79,10 +79,12 @@
     <Compile Include="DTO\FramesTimeLineDTO.cs" />
     <Compile Include="DTO\InfoDTO.cs" />
     <Compile Include="DTO\InfoTimeLineDTO.cs" />
+    <Compile Include="DTO\LeagueEntryDTO.cs" />
     <Compile Include="DTO\MatchDTO.cs" />
     <Compile Include="DTO\MatchEntryDTO.cs" />
     <Compile Include="DTO\MetadataDTO.cs" />
     <Compile Include="DTO\MetadataTimeLineDTO.cs" />
+    <Compile Include="DTO\MiniSeriesDTO.cs" />
     <Compile Include="DTO\MissionsDTO.cs" />
     <Compile Include="DTO\ObjectiveDTO.cs" />
     <Compile Include="DTO\ObjectivesDTO.cs" />
@@ -102,6 +104,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Repository\Category.cs" />
     <Compile Include="Repository\ConsoleCommands.cs" />
+    <Compile Include="Repository\Ranks.cs" />
     <Compile Include="Repository\TrainData.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -11,5 +11,7 @@ namespace MatchFetcher.DTO
     {
         public MetadataDTO metadata { get; set; }  
         public InfoDTO info { get; set; }
+        public string Tier { get; set; }
+        public string Rank { get; set; }
     }
 }

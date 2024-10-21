@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace MatchFetcher
 {
@@ -18,19 +19,13 @@ namespace MatchFetcher
         static async Task Main(string[] args)
         {
             // , "bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster", "challenger"
-            List<string> leagues = new List<string> { "iron", "bronze" };
+            List<string> leagues = new List<string> { "bronze" };
             List<string> divisions = new List<string> { "i" };
             List<string> pages = new List<string> { "1" };
 
             string apiKey = "RGAPI-e75b46d3-5e51-4829-b978-68790c3ebf56";
-
-            KeyValuePair<string, string> championToExtract = new KeyValuePair<string, string>("Tryndamere", "TOP"); // Key = champname. Value = position.
             
             //-----------------DO NOT EDIT BELOW THIS LINE, UNLESS YOU KNOW WHAT YOU'RE DOING----------------------//
-
-
-            List<string> championsInCategory = Category.GetChampionsInCategory(championToExtract.Key);
-            if (!championsInCategory.Any()) throw new Exception($"Invalid champion provided ( {championToExtract.Key} ). Check spelling.");
 
             List<MatchEntryDTO> matchEntries = new List<MatchEntryDTO>();
 
@@ -85,11 +80,13 @@ namespace MatchFetcher
 
                     string responseBody = await response.Content.ReadAsStringAsync();
                     SummonerDTO tempSummoner = JsonConvert.DeserializeObject<SummonerDTO>(responseBody);
+                    tempSummoner.Rank = match.Rank;
+                    tempSummoner.Tier = match.Tier;
                     if (!summoners.Any(x => x.id == tempSummoner.id)) summoners.Add(tempSummoner);
 
                     Thread.Sleep(1500);
 
-                    if (summoners.Count > 25) break; // REMOVE
+                    if (summoners.Count > 1) break; // REMOVE
 
                     ConsoleCommands.ClearCurrentLine();
                     Console.WriteLine($"Summoners found: {summoners.Count}");
@@ -152,12 +149,10 @@ namespace MatchFetcher
 
                         string responseBodyMatch = await responseMatch.Content.ReadAsStringAsync();
                         MatchDTO match = JsonConvert.DeserializeObject<MatchDTO>(responseBodyMatch);
-                        if (match.metadata != null && match.info != null
-                            && match.info.gameMode == "CLASSIC" && match.info.gameType == "MATCHED_GAME"
-                            && match.info.mapId == 11) 
-                        {
-                            Thread.Sleep(1500);
+                        Thread.Sleep(1500);
 
+                        if (match.metadata != null && match.info != null && match.info.gameMode == "CLASSIC" && match.info.gameType == "MATCHED_GAME" && match.info.mapId == 11) 
+                        {
                             url = url + "/timeline";
 
                             HttpResponseMessage responseTimeLine = await client.GetAsync(url);
@@ -166,14 +161,60 @@ namespace MatchFetcher
                             string responseBodyTimeLine = await responseTimeLine.Content.ReadAsStringAsync();
                             TimelineDTO timeLine = JsonConvert.DeserializeObject<TimelineDTO>(responseBodyTimeLine);
 
-                            matches.Add(match, timeLine);
-                            
-                            //break; // REMOVE
-
                             Thread.Sleep(1500);
 
+                            // Calculate match rank
+                            List<string> summonerIds = match.info.participants.Select(x => x.SummonerId).ToList();
+                            List<string> ranks = new List<string>();
+
+                            foreach (string summonerid in summonerIds) 
+                            {
+                                string sUrl = $"https://euw1.api.riotgames.com/lol/league/v4/entries/by-summoner/{summonerid}";
+
+                                HttpResponseMessage sResponseMatch = await client.GetAsync(sUrl);
+                                sResponseMatch.EnsureSuccessStatusCode();
+
+                                string sResponseBodyMatch = await sResponseMatch.Content.ReadAsStringAsync();
+                                var summonerEntryList = JsonConvert.DeserializeObject<List<LeagueEntryDTO>>(sResponseBodyMatch);
+                                LeagueEntryDTO summonerEntry = summonerEntryList.Where(x => x.QueueType == "RANKED_SOLO_5x5").FirstOrDefault();
+
+                                if (summonerEntry != null) ranks.Add(summonerEntry.Tier + "_" + summonerEntry.Rank);
+                                
+                                Thread.Sleep(1500);
+                            }
+
+                            if (!ranks.Any()) 
+                            {
+                                match.Tier = summonermatch.Key.Tier;
+                                match.Rank = summonermatch.Key.Rank;
+                            }
+                            else 
+                            {
+                                // Calculate average match rank
+                                Ranks rank = Ranks.CalculateMatchRank(ranks);
+                                match.Tier = rank.Tier;
+                                match.Rank = rank.Division;
+                            }
+
+                            // Create folder matchid som navn.
+                            string dPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                            Directory.CreateDirectory(dPath + "\\Matches"); // Create root directory
+
+                            Directory.CreateDirectory(dPath + "\\Matches\\" + $"{match.Tier + "_" + match.Rank}"); // Create rank folder
+
+                            Directory.CreateDirectory(dPath + "\\Matches" + "\\" + $"{match.Tier + "_" + match.Rank}" + "\\" + $"{matchid}");
+
+                            // Make match into json
+                            string matchJsoned = JsonConvert.SerializeObject(match);
+                            string timelineJsoned = JsonConvert.SerializeObject(timeLine);
+
+                            File.WriteAllText(dPath + "\\Matches" + "\\" + $"{match.Tier + "_" + match.Rank}" + "\\" + $"{matchid}" + "\\" + "match.json", matchJsoned);
+                            File.WriteAllText(dPath + "\\Matches" + "\\" + $"{match.Tier + "_" + match.Rank}" + "\\" + $"{matchid}" + "\\" + "timeline.json", timelineJsoned);
+
+                            matches.Add(match, timeLine);
+
                             ConsoleCommands.ClearCurrentLine();
-                            Console.WriteLine($"Ranked matches found: {matches.Count()}");
+                            Console.WriteLine($"Ranked matches found and processed: {matches.Count()}");
                         }
                     }
                     catch (HttpRequestException e)
@@ -183,163 +224,115 @@ namespace MatchFetcher
                 } 
             }
 
-            // Finalize the train data
-            Dictionary<string, List<TrainData>> specializedTrainData = new Dictionary<string, List<TrainData>>(); // This is the desired champion.
-            List<TrainData> otherTrainData = new List<TrainData>(); // This is everyone else, that is NOT that champion.
+            Dictionary<string, List<TrainData>> trainData = new Dictionary<string, List<TrainData>>();
 
             foreach (var element in matches) 
             {
                 // Key == match
                 // Value == timeline
 
-                // Find the unique champion we want to train the data on, specified in championToExtract.
-                ParticipantDTO participant = element.Key.info.participants.Where(x => x.ChampionName == championToExtract.Key).FirstOrDefault();
+                List<ParticipantDTO> champions = element.Key.info.participants.ToList();
 
-                if (participant != null && participant.IndividualPosition == championToExtract.Value) 
+                foreach (ParticipantDTO champion in champions) 
                 {
-                    // Desired champion EXISTS in this match AND has the correct position.
-
                     TrainData tempTrainData = new TrainData()
                     {
-                        participantId = participant.Puuid,
-                        participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == participant.Puuid),
-                        championName = participant.ChampionName
+                        participantId = champion.Puuid,
+                        championName = champion.ChampionName,
+                        position = champion.IndividualPosition,
+                        rank = element.Key.Rank,
+                        tier = element.Key.Tier
                     };
 
+                    int participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == champion.Puuid);
+                    List<ParticipantFrameDTO> frames = new List<ParticipantFrameDTO>();
+                    List<int> timeStamps = element.Value.Info.Frames.Select(x => x.Timestamp).ToList();
+
                     // Get all the frames of said champion.
-                    switch (tempTrainData.participantFrameNumber) 
+                    switch (participantFrameNumber)
                     {
                         case 0:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
                             break;
                         case 1:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._2).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._2).ToList();
                             break;
                         case 2:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._3).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._3).ToList();
                             break;
                         case 3:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._4).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._4).ToList();
                             break;
                         case 4:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._5).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._5).ToList();
                             break;
                         case 5:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._6).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._6).ToList();
                             break;
                         case 6:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._7).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._7).ToList();
                             break;
                         case 7:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._8).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._8).ToList();
                             break;
                         case 8:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._9).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._9).ToList();
                             break;
                         case 9:
-                            tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._10).ToList();
+                            frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._10).ToList();
                             break;
                     }
 
-                    if (specializedTrainData.ContainsKey(championToExtract.Key)) 
+                    for (int i = 0; i < timeStamps.Count; i++) 
                     {
-                        List<TrainData> trainData = specializedTrainData[championToExtract.Key];
-                        trainData.Add(tempTrainData);
+                        int timeStamp = timeStamps.ElementAt(i);
+                        ParticipantFrameDTO frame = frames.ElementAt(i);
+
+                        frame.TimeStamp = timeStamp;
+
+                        tempTrainData.timeStampAndFrames.Add(timeStamp, frame);
+                    }
+
+                    tempTrainData.frames = frames;
+
+                    // Add to dictionary, so each champion has their own entry.
+                    if (trainData.Keys.Contains(tempTrainData.championName)) 
+                    {
+                        List<TrainData> tmpChampList = trainData[tempTrainData.championName];
+                        tmpChampList.Add(tempTrainData);
                     }
                     else 
                     {
-                        specializedTrainData.Add(championToExtract.Key, new List<TrainData>() { tempTrainData });
+                        trainData.Add(tempTrainData.championName, new List<TrainData>() { tempTrainData });
                     }
-                }
- 
-                // Get every champion that is NOT our desired champion.
-                List<ParticipantDTO> tempParticipants = element.Key.info.participants.Where(x => x.ChampionName != championToExtract.Key).ToList();
-                    
-                foreach (ParticipantDTO tparticipant in tempParticipants) 
-                {
-                    // Is the champion we have here the SAME category as our desired champion AND SAME position?
-                    if (championsInCategory.Contains(tparticipant.ChampionName) && tparticipant.IndividualPosition == championToExtract.Value) 
-                    {
-                        // The champion that is NOT our desired champion, is in the SAME category as the desired champion.
-                        TrainData tempTrainData = new TrainData()
-                        {
-                            participantId = tparticipant.Puuid,
-                            participantFrameNumber = element.Value.Info.Participants.FindIndex(x => x.Puuid == tparticipant.Puuid),
-                            championName = tparticipant.ChampionName
-                        };
-
-                        // Get all the frames of said champion.
-                        switch (tempTrainData.participantFrameNumber)
-                        {
-                            case 0:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._1).ToList();
-                                break;
-                            case 1:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._2).ToList();
-                                break;
-                            case 2:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._3).ToList();
-                                break;
-                            case 3:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._4).ToList();
-                                break;
-                            case 4:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._5).ToList();
-                                break;
-                            case 5:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._6).ToList();
-                                break;
-                            case 6:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._7).ToList();
-                                break;
-                            case 7:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._8).ToList();
-                                break;
-                            case 8:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._9).ToList();
-                                break;
-                            case 9:
-                                tempTrainData.frames = element.Value.Info.Frames.Select(x => x.ParticipantFrames._10).ToList();
-                                break;
-                        }
-
-                        otherTrainData.Add(tempTrainData);
-                    }
-                    // We don't care about champions that don't fall into the same category & position - because comparing vayne top to tryndamere top
-                    // will draw undesired conclusions, when training the model. 
                 }
             }
-
-            if (!specializedTrainData.Any()) throw new Exception($"No champion with name {championToExtract.Key} was found. Get more games.");
 
             // Time to start generating the CSV.
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            Directory.CreateDirectory(desktopPath + "\\Data"); // Create root directory
             
-            // Create one for our SPECIFIC champions.
-            using (var writer = new StreamWriter(@desktopPath + $"\\{specializedTrainData.Keys.First()}"))
+            foreach (var element in trainData) 
             {
-                foreach (List<TrainData> td in specializedTrainData.Values)
+                string rootPath = desktopPath + "\\Data";
+                Directory.CreateDirectory(rootPath + $"\\{element.Key}"); // Create champion folder, with its corresponding name.
+
+                foreach (TrainData td in element.Value) 
                 {
-                    using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                    Directory.CreateDirectory(rootPath + $"\\{element.Key}" + $"\\{td.position}"); // Create position folder inside champion.
+                    Directory.CreateDirectory(rootPath + $"\\{element.Key}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}"); // Rank folder in position folder.
+
+                    using (var writer = new StreamWriter(@rootPath + $"\\{element.Key}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}" + "\\" + "data"))
                     {
-                        foreach (TrainData std in td)
+                        using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
                         {
-                            csv.WriteRecords(std.frames);
+                            csv.WriteRecords(td.frames);  
                         }
                     }
                 }
-            }
 
-            // Create one for OTHER champions.
-            using (var writer = new StreamWriter(@desktopPath + $"\\otherChampions")) 
-            {
-                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
-                {
-                    foreach (TrainData td in otherTrainData)
-                    {
-                        csv.WriteRecords(td.frames);
-                    }
-                }
+                // Det sidste problem er at illaoi fx har 4 kampe, og alle de frames skal slås sammen, men illaoi kan også spille mid,top etc..
+                // Så der skal findes en løsning på det.
             }
         }
     }

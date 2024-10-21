@@ -20,5 +20,6 @@ namespace MatchFetcher.DTO
         public int TimeEnemySpentControlled { get; set; }
         public int TotalGold { get; set; }
         public int Xp { get; set; }
+        public int TimeStamp { get; set; }
     }
 }

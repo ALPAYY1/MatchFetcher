@@ -14,5 +14,7 @@ namespace MatchFetcher.DTO
         public int profileIconId { get; set; }
         public long revisionDate { get; set; }
         public int summonerLevel { get; set; }
+        public string Tier { get; set; }
+        public string Rank { get; set; }
     }
 }
