@@ -53,7 +53,16 @@ namespace MatchFetcher.Repository
 
             foreach (string rank in ranks) 
             {
-                int value = (int)Enum.Parse(typeof(Ranks.Rank), rank);
+                int indexOfUnderscore = rank.IndexOf('_');
+                string tRank = rank.Substring(0, indexOfUnderscore);
+
+                int value;
+
+                if (tRank.ToLower() == "master" || tRank.ToLower() == "grandmaster" || tRank.ToLower() == "challenger") 
+                    value = (int)Enum.Parse(typeof(Ranks.Rank), tRank);
+                else 
+                    value = (int)Enum.Parse(typeof(Ranks.Rank), rank);
+
                 points.Add(value);
             }
 
@@ -67,11 +76,44 @@ namespace MatchFetcher.Repository
 
             Ranks rnk = new Ranks()
             {
-                Tier = splitRank[0],
-                Division = splitRank[1]
+                Tier = splitRank[0]
             };
 
+            if (splitRank.Length == 1) rnk.Division = "I";
+            else rnk.Division = splitRank[1];
+
             return rnk;
+        }
+
+        public static bool IsTrashTier(string theRank) 
+        {
+            string rank = theRank.ToLower();
+            
+            switch (rank) 
+            {
+                case "iron":
+                    return true;
+                case "bronze":
+                    return true;
+                case "silver":
+                    return true;
+                case "gold":
+                    return true;
+                case "platinum":
+                    return true;
+                case "emerald":
+                    return true;
+                case "diamond":
+                    return true;
+                case "master":
+                    return false;
+                case "grandmaster":
+                    return false;
+                case "challenger":
+                    return false;
+                default:
+                    return false;
+            }
         }
     }
 }

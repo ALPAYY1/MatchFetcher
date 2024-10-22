@@ -1,4 +1,5 @@
 ﻿using CsvHelper;
+using CsvHelper.Configuration;
 using MatchFetcher.DTO;
 using MatchFetcher.Repository;
 using Newtonsoft.Json;
@@ -18,12 +19,13 @@ namespace MatchFetcher
     {
         static async Task Main(string[] args)
         {
-            // , "bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster", "challenger"
-            List<string> leagues = new List<string> { "bronze" };
-            List<string> divisions = new List<string> { "i" };
+            List<string> leagues = new List<string> { "iron", "bronze", "silver", "gold", "platinum", "emerald", "diamond" };
+            List<string> divisions = new List<string> { "iv", "i" };
             List<string> pages = new List<string> { "1" };
 
             string apiKey = "RGAPI-e75b46d3-5e51-4829-b978-68790c3ebf56";
+
+
             
             //-----------------DO NOT EDIT BELOW THIS LINE, UNLESS YOU KNOW WHAT YOU'RE DOING----------------------//
 
@@ -85,8 +87,6 @@ namespace MatchFetcher
                     if (!summoners.Any(x => x.id == tempSummoner.id)) summoners.Add(tempSummoner);
 
                     Thread.Sleep(1500);
-
-                    if (summoners.Count > 1) break; // REMOVE
 
                     ConsoleCommands.ClearCurrentLine();
                     Console.WriteLine($"Summoners found: {summoners.Count}");
@@ -224,7 +224,7 @@ namespace MatchFetcher
                 } 
             }
 
-            Dictionary<string, List<TrainData>> trainData = new Dictionary<string, List<TrainData>>();
+            List<TrainData> trainData = new List<TrainData>();
 
             foreach (var element in matches) 
             {
@@ -295,16 +295,7 @@ namespace MatchFetcher
 
                     tempTrainData.frames = frames;
 
-                    // Add to dictionary, so each champion has their own entry.
-                    if (trainData.Keys.Contains(tempTrainData.championName)) 
-                    {
-                        List<TrainData> tmpChampList = trainData[tempTrainData.championName];
-                        tmpChampList.Add(tempTrainData);
-                    }
-                    else 
-                    {
-                        trainData.Add(tempTrainData.championName, new List<TrainData>() { tempTrainData });
-                    }
+                    trainData.Add(tempTrainData);
                 }
             }
 
@@ -312,27 +303,42 @@ namespace MatchFetcher
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             Directory.CreateDirectory(desktopPath + "\\Data"); // Create root directory
             
-            foreach (var element in trainData) 
+            foreach (TrainData td in trainData) 
             {
                 string rootPath = desktopPath + "\\Data";
-                Directory.CreateDirectory(rootPath + $"\\{element.Key}"); // Create champion folder, with its corresponding name.
+                Directory.CreateDirectory(rootPath + $"\\{td.championName}"); // Create champion folder, with its corresponding name.
 
-                foreach (TrainData td in element.Value) 
+                Directory.CreateDirectory(rootPath + $"\\{td.championName}" + $"\\{td.position}"); // Create position folder inside champion.
+                Directory.CreateDirectory(rootPath + $"\\{td.championName}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}"); // Rank folder in position folder.
+
+                bool exists = File.Exists(rootPath + $"\\{td.championName}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}" + "\\" + "data.csv");
+
+                if (exists) 
                 {
-                    Directory.CreateDirectory(rootPath + $"\\{element.Key}" + $"\\{td.position}"); // Create position folder inside champion.
-                    Directory.CreateDirectory(rootPath + $"\\{element.Key}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}"); // Rank folder in position folder.
-
-                    using (var writer = new StreamWriter(@rootPath + $"\\{element.Key}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}" + "\\" + "data"))
+                    // Append to file
+                    var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = false };
+                    using (var stream = File.Open(rootPath + $"\\{td.championName}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}" + "\\" + "data.csv", FileMode.Append))
                     {
-                        using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                        using (var writer = new StreamWriter(stream))
                         {
-                            csv.WriteRecords(td.frames);  
+                            using (var csv = new CsvWriter(writer, config))
+                            {
+                                csv.WriteRecords(td.frames);
+                            }
                         }
                     }
                 }
-
-                // Det sidste problem er at illaoi fx har 4 kampe, og alle de frames skal slås sammen, men illaoi kan også spille mid,top etc..
-                // Så der skal findes en løsning på det.
+                else 
+                {
+                    // Create file
+                    using (var writer = new StreamWriter(@rootPath + $"\\{td.championName}" + $"\\{td.position}" + $"\\{td.tier + "_" + td.rank}" + "\\" + "data.csv"))
+                    {
+                        using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                        {
+                            csv.WriteRecords(td.frames);
+                        }
+                    }
+                }
             }
         }
     }
