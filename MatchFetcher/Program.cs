@@ -23,7 +23,7 @@ namespace MatchFetcher
             List<string> divisions = new List<string> { "iv", "i" };
             List<string> pages = new List<string> { "1" };
 
-            string apiKey = "RGAPI-e75b46d3-5e51-4829-b978-68790c3ebf56";
+            string apiKey = "";
 
 
             
